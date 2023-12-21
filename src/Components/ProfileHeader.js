@@ -1,6 +1,7 @@
 // src/components/ProfileHeader.js
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { getTimeZones } from "../utils/getTimeZones";
 
 const ProfileHeader = () => {
   const [countries, setCountries] = useState([]);
@@ -9,49 +10,46 @@ const ProfileHeader = () => {
   );
   const [currentDateTime, setCurrentDateTime] = useState(null);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [timePausedAt, setTimePausedAt] = useState(0);
+  const [intervalID, setIntervalID] = useState(null);
   const navigate = useNavigate();
 
+  const setClock = () => {
+    const newTime = new Date(
+      new Date().toLocaleString("en-US", { timeZone: selectedCountry })
+    );
+    const hours = newTime.getHours().toString().padStart(2, "0");
+    const minutes = newTime.getMinutes().toString().padStart(2, "0");
+    const seconds = newTime.getSeconds().toString().padStart(2, "0");
+    const formattedDate = `${hours}:${minutes}:${seconds}`;
+    setCurrentDateTime(formattedDate);
+  };
+
   useEffect(() => {
-    // Fetch the list of countries from the country API
-    fetch("http://worldtimeapi.org/api/timezone")
-      .then((response) => response.json())
-      .then((data) => setCountries(data))
-      .catch((error) => console.error("Error fetching countries:", error));
+    const initTimeZones = async () => {
+      setCountries(await getTimeZones());
+      setClock();
+    };
+
+    initTimeZones();
   }, []);
 
   useEffect(() => {
-    const fetchDateTime = async () => {
-      try {
-        const response = await fetch(
-          `http://worldtimeapi.org/api/timezone/${selectedCountry}`
-        );
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const data = await response.json();
-        const newTime = new Date(
-          new Date().toLocaleString("en-US", { timeZone: data.timezone })
-        );
-        const hours = newTime.getHours().toString().padStart(2, "0");
-        const minutes = newTime.getMinutes().toString().padStart(2, "0");
-        const seconds = newTime.getSeconds().toString().padStart(2, "0");
-        const formattedDate = `${hours}:${minutes}:${seconds}`;
-        setCurrentDateTime(formattedDate);
-      } catch (error) {
-        console.error("Error fetching current date and time:", error);
+    setClock();
+  }, [selectedCountry]);
+
+  useEffect(() => {
+    if (isTimerPaused) {
+      setTimePausedAt(new Date());
+      clearInterval(intervalID);
+    } else {
+      setCurrentDateTime((preDateTime) => preDateTime - timePausedAt);
+
+      if (!intervalID) {
+        setIntervalID(setInterval(setClock, 1000));
       }
-    };
-
-    fetchDateTime();
-    let intervalId;
-
-    if (selectedCountry && !isTimerPaused) {
-      // Set up an interval to fetch the current date and time every second
-      intervalId = setInterval(fetchDateTime, 1000);
     }
-    // Clear the interval on component unmount or when the timer is paused
-    return () => clearInterval(intervalId);
-  }, [selectedCountry, isTimerPaused]);
+  }, [isTimerPaused]);
 
   const handleCountryChange = (event) => {
     const selectedCountry = event.target.value;
